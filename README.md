@@ -103,6 +103,15 @@ The ReAct agent will:
 - Read-only transaction analysis
 - Required email verification
 
+## Screenshots
+
+![Google Sign-In](google_signin.png)
+![Logs](logs.png)
+![Screenshot 1](Screenshot1.png)
+![Screenshot 2](Screenshot2.png)
+![Screenshot 3](Screenshot3.png)
+![Screenshot 4](Screenshot4.png)
+
 ## Architecture
 
 - `server.py`: MCP server with tool definitions and OAuth setup
