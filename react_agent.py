@@ -27,11 +27,18 @@ async def run_llm(history: list, observation: str = None, toolList: str = None) 
     {toolList}
     
     """ + """
-    Format responses as either:
-    - Thought: <reasoning>
-    - Action: {"tool": "...", "args": {...}}
-    or
-    - Final Answer: {"result": "<answer to user>"}
+    Format your response in one of these two ways:
+
+    If you need to use a tool:
+    Thought: <explain your reasoning>
+    Action: {"tool": "tool_name", "args": {"arg1": "value1"}}
+
+    If you have the final answer:
+    Thought: <explain your conclusion>
+    Final Answer: {"result": "your answer here"}
+
+    Always include a Thought before any Action or Final Answer.
+    Each part (Thought/Action/Final Answer) should be on its own line.
     """
     model = genai.GenerativeModel(
         model_name='gemini-2.5-flash',
@@ -59,16 +66,33 @@ async def agent(prompt: str):
             print(f"\nLLM:\n{llm_output}")
             history.append({"role": "model","parts": [{ "text": llm_output}]})
 
+            # Parse the output into thought and action/final answer
+            lines = llm_output.strip().split('\n')
+            thought = None
+            action_or_final = None
+
+            for line in lines:
+                if line.startswith("Thought:"):
+                    thought = line[8:].strip()
+                elif line.startswith("Action:") or line.startswith("Final Answer:"):
+                    action_or_final = line.strip()
+
+            if not thought:
+                print("⚠️ No thought found in response")
+                # continue
+            else:
+                print(f"💭 Thought: {thought}")
+
             # Step 2: If it's final answer → stop
-            if llm_output.startswith("Final Answer:"):
-                final_answer = json.loads(llm_output.replace("Final Answer:", "").strip())
+            if action_or_final and action_or_final.startswith("Final Answer:"):
+                final_answer = json.loads(action_or_final.replace("Final Answer:", "").strip())
                 print("\n🎯 Agent Final Answer:", final_answer["result"])
                 break
 
             # Step 3: If it's an action → parse + call MCP tool
-            if llm_output.startswith("Action:"):
+            if action_or_final and action_or_final.startswith("Action:"):
                 try:
-                    action = json.loads(llm_output.replace("Action:", "").strip())
+                    action = json.loads(action_or_final.replace("Action:", "").strip())
                     tool = action["tool"]
                     args = action.get("args", {})
                     print(f"⚙️ Calling tool {tool} with {args}")
@@ -83,7 +107,7 @@ async def agent(prompt: str):
 
 
 def main():
-    prompt = "Get the email id of the authenticated Google user."
+    prompt = "Get the expense details of authenticated Google user."
     asyncio.run(agent(prompt))
 
 
