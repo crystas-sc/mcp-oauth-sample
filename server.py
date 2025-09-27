@@ -1,4 +1,6 @@
 import os
+import psycopg2
+from psycopg2.extras import RealDictCursor
 from dotenv import load_dotenv
 from supabase import create_client, Client
 
@@ -13,6 +15,9 @@ client_secret = os.getenv("CLIENT_SECRET")
 url: str = os.environ.get("SUPABASE_URL")
 key: str = os.environ.get("SUPABASE_KEY")
 supabase = create_client(url, key)
+
+# Get Supabase direct database connection string
+CONN_STRING = os.environ.get("SUPABASE_DATABASE_URL")
 
 # The GoogleProvider handles Google's token format and validation
 auth_provider = GoogleProvider(
@@ -45,7 +50,7 @@ async def get_user_info() -> dict:
         # "locale": token.claims.get("locale")
     }
 
-@mcp.tool
+# @mcp.tool
 async def get_user_expenses(email_id: str) -> dict:
     """Returns the user's expense details including amount and category from the database.
     
@@ -66,6 +71,62 @@ async def get_user_expenses(email_id: str) -> dict:
             "status": "success",
             "expenses": response.data
         }
+    except Exception as e:
+        return {
+            "status": "error",
+            "message": str(e)
+        }
+
+@mcp.tool
+async def execute_transaction_query(query: str, email_id: str) -> dict:
+    """Execute a custom SELECT query on the transactions table.
+    
+    table name: transactions
+    columns:
+    email_id VARCHAR(255) NOT NULL,          -- identifies the person
+    amount NUMERIC(12,2) NOT NULL,           -- transaction amount with 2 decimal places
+    currency VARCHAR(10) NOT NULL DEFAULT 'USD', -- ISO 4217 currency code
+    transaction_type VARCHAR(50) NOT NULL,   -- e.g., 'debit', 'credit', 'refund'
+    category VARCHAR(50) NOT NULL,           -- e.g., 'food', 'clothes', 'shopping', 'other'
+    description TEXT,                        -- optional description
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP, -- timestamp
+
+    
+    Args:
+        query (str): The SELECT query to execute. Must include 'WHERE email_id = %s'
+        email_id (str): Email ID of the user whose transactions to query
+        
+    Example queries:
+        "SELECT amount, category FROM transactions WHERE email_id = %s AND created_at < '2026-01-01'"
+        "SELECT SUM(amount) FROM transactions WHERE email_id = %s AND transaction_type = 'debit'"
+    """
+    # Security checks
+    query_lower = query.lower().strip()
+    if not query_lower.startswith('select'):
+        return {
+            "status": "error",
+            "message": "Only SELECT queries are allowed"
+        }
+        
+    if 'where email_id = %s' not in query_lower:
+        return {
+            "status": "error",
+            "message": "Query must include 'WHERE email_id = %s' clause for security"
+        }
+        
+    try:
+        with psycopg2.connect(CONN_STRING) as conn:
+            with conn.cursor(cursor_factory=RealDictCursor) as cur:
+                # Execute query with email parameter
+                cur.execute(query, (email_id,))
+                results = cur.fetchall()
+                
+                return {
+                    "status": "success",
+                    "data": results,
+                    "count": len(results)
+                }
+                
     except Exception as e:
         return {
             "status": "error",
