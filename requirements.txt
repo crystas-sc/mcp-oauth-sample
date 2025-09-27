@@ -1,0 +1,6 @@
+fastmcp
+google-generativeai
+python-dotenv
+gradio
+supabase
+psycopg2-binary
